@@ -1,8 +1,8 @@
 """SQLite-backed Kanban board for multi-profile collaboration.
 
-The board lives at ``$HERMES_HOME/kanban.db`` (profile-agnostic on purpose:
-multiple profiles on the same machine all see the same board, which IS the
-coordination primitive).
+The board lives at ``$HERMES_HOME/kanban.db`` by default. Dispatchers pass
+``HERMES_KANBAN_DB`` to worker profiles so multiple profiles on the same
+machine all see the same board, which IS the coordination primitive.
 
 Schema is intentionally small: tasks, task_links, task_comments,
 task_events.  The ``workspace_kind`` field decouples coordination from git
@@ -62,7 +62,15 @@ _CTX_MAX_COMMENT_BYTES  = 2 * 1024   # 2 KB per comment
 # ---------------------------------------------------------------------------
 
 def kanban_db_path() -> Path:
-    """Return the path to ``kanban.db`` inside the active HERMES_HOME."""
+    """Return the path to the shared kanban database.
+
+    ``HERMES_KANBAN_DB`` lets a dispatcher launched from one profile pin the
+    board path before spawning worker profiles, so profile-local HERMES_HOME
+    values do not split the board.
+    """
+    override = os.environ.get("HERMES_KANBAN_DB")
+    if override:
+        return Path(override).expanduser().resolve()
     from hermes_constants import get_hermes_home
     return get_hermes_home() / "kanban.db"
 
@@ -2070,6 +2078,7 @@ def _default_spawn(task: Task, workspace: str) -> Optional[int]:
         env["HERMES_TENANT"] = task.tenant
     env["HERMES_KANBAN_TASK"] = task.id
     env["HERMES_KANBAN_WORKSPACE"] = workspace
+    env["HERMES_KANBAN_DB"] = str(kanban_db_path())
     # HERMES_PROFILE is the author the kanban_comment tool defaults to.
     # `hermes -p <assignee>` activates the profile, but the env var is
     # what the tool reads — set it explicitly here so comments are

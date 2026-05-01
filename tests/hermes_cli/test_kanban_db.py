@@ -38,6 +38,21 @@ def test_init_db_is_idempotent(kanban_home):
     assert tasks[0].title == "persisted"
 
 
+def test_kanban_db_path_honors_shared_override(tmp_path, monkeypatch):
+    shared_db = tmp_path / ".hermes" / "kanban.db"
+    profile_home = tmp_path / ".hermes" / "profiles" / "market-advisor"
+    profile_home.mkdir(parents=True)
+    monkeypatch.setenv("HERMES_HOME", str(profile_home))
+    monkeypatch.setenv("HERMES_KANBAN_DB", str(shared_db))
+    monkeypatch.setattr(Path, "home", lambda: tmp_path)
+
+    assert kb.kanban_db_path() == shared_db.resolve()
+    kb.init_db()
+
+    assert shared_db.exists()
+    assert not (profile_home / "kanban.db").exists()
+
+
 def test_init_creates_expected_tables(kanban_home):
     with kb.connect() as conn:
         rows = conn.execute(

@@ -86,6 +86,7 @@ All variables go in `~/.hermes/.env`. You can also set them with `hermes config 
 | `HERMES_LOCAL_STT_COMMAND` | Optional local speech-to-text command template. Supports `{input_path}`, `{output_dir}`, `{language}`, and `{model}` placeholders |
 | `HERMES_LOCAL_STT_LANGUAGE` | Default language passed to `HERMES_LOCAL_STT_COMMAND` or auto-detected local `whisper` CLI fallback (default: `en`) |
 | `HERMES_HOME` | Override Hermes config directory (default: `~/.hermes`). Also scopes the gateway PID file and systemd service name, so multiple installations can run concurrently |
+| `HERMES_KANBAN_DB` | Override the Kanban SQLite board path. The dispatcher sets this for spawned profile workers so all profiles read and write the same shared board. |
 
 ## Provider Auth (OAuth)
 
