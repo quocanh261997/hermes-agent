@@ -161,6 +161,11 @@ _teams_mod = load_plugin_adapter("teams")
 
 _teams_mod.TEAMS_SDK_AVAILABLE = True
 _teams_mod.AIOHTTP_AVAILABLE = True
+if _teams_mod.TypingActivityInput is None:
+    class _MockTypingActivityInput:
+        pass
+
+    _teams_mod.TypingActivityInput = _MockTypingActivityInput
 
 TeamsAdapter = _teams_mod.TeamsAdapter
 check_requirements = _teams_mod.check_requirements
