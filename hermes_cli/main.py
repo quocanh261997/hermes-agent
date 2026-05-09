@@ -7668,7 +7668,7 @@ def _cmd_update_impl(args, gateway_mode: bool):
             # systemd units without SIGUSR1 wiring this wait just times out
             # and we fall back to ``systemctl restart`` (the old behaviour).
             try:
-                from hermes_constants import (
+                from gateway.restart import (
                     DEFAULT_GATEWAY_RESTART_DRAIN_TIMEOUT as _DEFAULT_DRAIN,
                 )
             except Exception:
@@ -7791,30 +7791,42 @@ def _cmd_update_impl(args, gateway_mode: bool):
                                 # dies unexpectedly. For a voluntary restart
                                 # on update, it's dead time the user watches.
                                 #
-                                # Shortcut it: ``reset-failed`` + ``start``
-                                # skips RestartSec entirely (we're manually
-                                # initiating the unit, not waiting for
-                                # systemd's auto-restart logic). Takes about
-                                # as long as the process takes to come up
-                                # (~1-3s on a warm box).
-                                #
-                                # If the unit is already active because
-                                # RestartSec elapsed while we were draining,
-                                # ``start`` is a no-op and we fall through to
-                                # the poll below. Either way we collapse the
-                                # 60s+ delay to a ~5s one.
-                                subprocess.run(
-                                    scope_cmd + ["reset-failed", svc_name],
-                                    capture_output=True,
-                                    text=True,
-                                    timeout=10,
-                                )
-                                subprocess.run(
-                                    scope_cmd + ["start", svc_name],
-                                    capture_output=True,
-                                    text=True,
-                                    timeout=15,
-                                )
+                                # Shortcut it with an explicit restart job.
+                                # ``systemctl start`` can wait behind an
+                                # existing activating(auto-restart) job and
+                                # time out during RestartSec. ``restart
+                                # --no-block`` replaces the pending job, asks
+                                # systemd to start immediately, and returns
+                                # without wedging this all-gateway loop.
+                                try:
+                                    subprocess.run(
+                                        scope_cmd + ["reset-failed", svc_name],
+                                        capture_output=True,
+                                        text=True,
+                                        timeout=10,
+                                    )
+                                except (FileNotFoundError, subprocess.TimeoutExpired) as e:
+                                    logger.debug(
+                                        "Failed to reset systemd state for %s during update restart: %s",
+                                        svc_name,
+                                        e,
+                                    )
+                                try:
+                                    subprocess.run(
+                                        scope_cmd + ["restart", "--no-block", svc_name],
+                                        capture_output=True,
+                                        text=True,
+                                        timeout=15,
+                                    )
+                                except (FileNotFoundError, subprocess.TimeoutExpired) as e:
+                                    print(
+                                        f"  ⚠ {svc_name} restart request timed out; continuing with remaining gateways"
+                                    )
+                                    logger.debug(
+                                        "Timed out requesting non-blocking systemd restart for %s: %s",
+                                        svc_name,
+                                        e,
+                                    )
                                 # Short poll: the gateway should be up within
                                 # a few seconds now that we bypassed
                                 # RestartSec. Fall back to the longer
